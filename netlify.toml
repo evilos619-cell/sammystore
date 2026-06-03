@@ -1,0 +1,10 @@
+[build]
+  command = "bun run build"
+  publish = "dist/client"
+
+[build.environment]
+  # Public/anon keys that are intentionally inlined into the client bundle by Vite.
+  # These are not sensitive — they are the equivalent of publishable/anon keys.
+  # SECRETS_SCAN_OMIT_KEYS tells Netlify's scanner to skip these specific variable names.
+  # Do NOT add sensitive keys here (SUPABASE_SERVICE_ROLE_KEY, GITHUB_PAT, NOWPAYMENTS_API_KEY, etc.)
+  SECRETS_SCAN_OMIT_KEYS = "VITE_SUPABASE_ANON_KEY,VITE_SUPABASE_PUBLISHABLE_KEY,VITE_PAYSTACK_PUBLIC_KEY,VITE_SUPABASE_URL,VITE_SUPABASE_PROJECT_ID,SUPABASE_PUBLISHABLE_KEY,SUPABASE_URL"
