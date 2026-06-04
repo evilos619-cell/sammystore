@@ -12,13 +12,6 @@ export const categories: Category[] = [
   { id: 5, name: "YouTube", slug: "youtube" },
   { id: 6, name: "Twitter / X", slug: "twitter-x" },
   { id: 7, name: "LinkedIn", slug: "linkedin" },
-  { id: 8, name: "Aged Twitter", slug: "aged-twitter" },
-  { id: 9, name: "Aged Instagram", slug: "aged-instagram" },
-  { id: 10, name: "Random Facebook", slug: "random-facebook" },
-  { id: 11, name: "USA Facebook", slug: "usa-facebook" },
-  { id: 12, name: "Tools", slug: "tools" },
-  { id: 13, name: "Working Profiles with Picture & Video", slug: "working-profiles" },
-  { id: 14, name: "Below 50 Friend Countries Facebook", slug: "below-50-friend" },
 ];
 
 export const navLinks = [
