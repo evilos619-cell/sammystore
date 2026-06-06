@@ -19,10 +19,6 @@ author = "agent"
 task = "workflow.run"
 args = "Start application"
 
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Sync to GitHub"
-
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -35,17 +31,6 @@ task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5000
 
-[[workflows.workflow]]
-name = "Sync to GitHub"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "bash scripts/push-github.sh"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
 [[ports]]
 localPort = 3001
 externalPort = 3001
@@ -54,10 +39,6 @@ externalPort = 3001
 localPort = 5000
 externalPort = 80
 
-[[ports]]
-localPort = 5001
-externalPort = 3000
-
 [userenv]
 
 [userenv.shared]
@@ -65,7 +46,8 @@ VITE_SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOi
 SUPABASE_URL = "https://jerhefcpsmcvxkmvyyqe.supabase.co"
 SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImplcmhlZmNwc21jdnhrbXZ5eXFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNDcwNDQsImV4cCI6MjA5NTkyMzA0NH0.NX8kQ8t2XY11Tmyq8GkaUCzSbZx4K3ubqsu8tCASN_0"
 VITE_SUPABASE_PROJECT_ID = "jerhefcpsmcvxkmvyyqe"
-VITE_SUPABASE_URL = "https://bevmllrasbnmujbgbnuo.supabase.co"
+VITE_SUPABASE_URL = "https://jerhefcpsmcvxkmvyyqe.supabase.co"
+VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImplcmhlZmNwc21jdnhrbXZ5eXFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNDcwNDQsImV4cCI6MjA5NTkyMzA0NH0.NX8kQ8t2XY11Tmyq8GkaUCzSbZx4K3ubqsu8tCASN_0"
 
 [deployment]
 deploymentTarget = "autoscale"
