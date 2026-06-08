@@ -353,15 +353,24 @@ function CategoriesTab() {
   const openCreate = () => { setEditing(null); setForm({ name: "", slug: "", description: "" }); setDialogOpen(true); };
   const openEdit   = (c: Category) => { setEditing(c); setForm({ name: c.name, slug: c.slug, description: c.description ?? "" }); setDialogOpen(true); };
 
+  const apiToken = async () => {
+    const { data: session } = await supabase.auth.getSession();
+    return session.session?.access_token ?? "";
+  };
+
   const handleSave = async () => {
     if (!form.name.trim()) return toast.error("Name is required");
     setSaving(true);
     const payload = { name: form.name.trim(), slug: (form.slug || slugify(form.name)).trim(), description: form.description.trim() || null };
-    const { error } = editing
-      ? await supabase.from("product_categories").update(payload).eq("id", editing.id)
-      : await supabase.from("product_categories").insert(payload);
+    const token = await apiToken();
+    const res = await fetch("/api/categories/upsert", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(editing ? { id: editing.id, ...payload } : payload),
+    });
+    const json = await res.json() as { error?: string };
     setSaving(false);
-    if (error) { toast.error(error.message); return; }
+    if (!res.ok) { toast.error(json.error ?? "Save failed"); return; }
     toast.success(editing ? "Category updated!" : "Category created!");
     setDialogOpen(false); fetch();
   };
@@ -369,9 +378,18 @@ function CategoriesTab() {
   const handleDelete = async () => {
     if (!deleteId) return;
     setDeleting(true);
-    const { error } = await supabase.from("product_categories").delete().eq("id", deleteId);
+    const token = await apiToken();
+    const res = await fetch(`/api/categories/${deleteId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
     setDeleting(false); setDeleteId(null);
-    error ? toast.error(error.message) : toast.success("Category deleted");
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({ error: "Delete failed" }));
+      toast.error((j as { error?: string }).error ?? "Delete failed");
+    } else {
+      toast.success("Category deleted");
+    }
     fetch();
   };
 
@@ -635,6 +653,11 @@ function ProductsTab() {
   };
   const slugify = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
+  const apiToken = async () => {
+    const { data: session } = await supabase.auth.getSession();
+    return session.session?.access_token ?? "";
+  };
+
   const handleSave = async () => {
     if (!form.title.trim()) return toast.error("Title is required");
     if (form.price == null || Number(form.price) < 0) return toast.error("Price must be ≥ 0");
@@ -654,14 +677,15 @@ function ProductsTab() {
       image_url: form.image_url?.trim() || null,
       updated_at: now,
     };
-    let error;
-    if (editing) {
-      ({ error } = await supabase.from("products").update(payload).eq("id", editing.id));
-    } else {
-      ({ error } = await supabase.from("products").insert({ ...payload, created_at: now }));
-    }
+    const token = await apiToken();
+    const res = await fetch("/api/products/upsert", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(editing ? { id: editing.id, ...payload } : { ...payload, created_at: now }),
+    });
+    const json = await res.json() as { error?: string };
     setSaving(false);
-    if (error) { toast.error(error.message); return; }
+    if (!res.ok) { toast.error(json.error ?? "Save failed"); return; }
     toast.success(editing ? "Product updated!" : "Product created!");
     setDialogOpen(false); fetchData();
   };
@@ -669,9 +693,18 @@ function ProductsTab() {
   const handleDelete = async () => {
     if (!deleteId) return;
     setDeleting(true);
-    const { error } = await supabase.from("products").delete().eq("id", deleteId);
+    const token = await apiToken();
+    const res = await fetch(`/api/products/${deleteId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
     setDeleting(false); setDeleteId(null);
-    error ? toast.error(error.message) : toast.success("Product deleted");
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({ error: "Delete failed" }));
+      toast.error((j as { error?: string }).error ?? "Delete failed");
+    } else {
+      toast.success("Product deleted");
+    }
     fetchData();
   };
 
@@ -1153,19 +1186,11 @@ function CredentialsDialog({ product, onClose }: { product: Product; onClose: ()
     if (!lines.length) return toast.error("Enter at least one credential");
     setAdding(true);
 
-    const rows = lines.map((content, i) => {
-      const parts = content.split(/\||\//).map((part) => part.trim());
-      return {
-        product_id: product.id,
-        content,
-        label: bulkLabel.trim() ? `${bulkLabel.trim()} #${i + 1}` : null,
-        username: parts[0] || null,
-        password: parts[1] || null,
-        email: parts[2] || null,
-        email_password: parts[3] || null,
-        two_factor: parts[4] || null,
-      };
-    });
+    const rows = lines.map((content, i) => ({
+      product_id: product.id,
+      content,
+      label: bulkLabel.trim() ? `${bulkLabel.trim()} #${i + 1}` : null,
+    }));
 
     const { error } = await supabase.from("product_credentials").insert(rows);
     setAdding(false);

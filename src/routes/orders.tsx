@@ -2,7 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import {
   Loader2, ShoppingBag, Copy, CheckCheck, ChevronDown, ChevronUp,
-  Package, CheckCircle, Clock, XCircle, RefreshCw, Key,
+  Package, CheckCircle, Clock, XCircle, RefreshCw, Key, AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,13 +12,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
-type Credential = {
-  id: string;
-  content: string;
-  label: string | null;
-  delivered_at: string | null;
-};
-
 type OrderItem = {
   id: string;
   title: string;
@@ -26,7 +19,6 @@ type OrderItem = {
   quantity: number;
   product_id: string | null;
   delivered_payload: string | null;
-  credential: Credential | null;
 };
 
 type Order = {
@@ -45,11 +37,11 @@ function parseCredential(content: string) {
 }
 
 const STATUS_META: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  completed:          { label: "Completed",            color: "bg-green-100 text-green-700",  icon: <CheckCircle className="w-3.5 h-3.5" /> },
-  pending:            { label: "Pending",              color: "bg-yellow-100 text-yellow-700", icon: <Clock className="w-3.5 h-3.5" /> },
-  pending_credentials: { label: "Pending credentials", color: "bg-orange-100 text-orange-700", icon: <AlertCircle className="w-3.5 h-3.5" /> },
-  failed:             { label: "Failed",               color: "bg-red-100 text-red-600",      icon: <XCircle className="w-3.5 h-3.5" /> },
-  refunded:           { label: "Refunded",             color: "bg-blue-100 text-blue-700",    icon: <RefreshCw className="w-3.5 h-3.5" /> },
+  completed:           { label: "Completed",            color: "bg-green-100 text-green-700",   icon: <CheckCircle className="w-3.5 h-3.5" /> },
+  pending:             { label: "Pending",              color: "bg-yellow-100 text-yellow-700", icon: <Clock className="w-3.5 h-3.5" /> },
+  pending_credentials: { label: "Pending credentials",  color: "bg-orange-100 text-orange-700", icon: <AlertCircle className="w-3.5 h-3.5" /> },
+  failed:              { label: "Failed",               color: "bg-red-100 text-red-600",       icon: <XCircle className="w-3.5 h-3.5" /> },
+  refunded:            { label: "Refunded",             color: "bg-blue-100 text-blue-700",     icon: <RefreshCw className="w-3.5 h-3.5" /> },
 };
 
 export default function OrdersPage() {
@@ -89,21 +81,6 @@ export default function OrdersPage() {
       .select("id, order_id, title, unit_price, quantity, product_id, delivered_payload")
       .in("order_id", orderIds);
 
-    const credIds = ((rawItems ?? []) as Array<{ delivered_payload: string | null }>)
-      .map((i) => i.delivered_payload)
-      .filter((p): p is string => !!p);
-
-    let credMap: Record<string, Credential> = {};
-    if (credIds.length) {
-      const { data: creds } = await supabase
-        .from("product_credentials")
-        .select("id, content, label, delivered_at")
-        .in("id", credIds);
-      credMap = Object.fromEntries(
-        ((creds ?? []) as Credential[]).map((c) => [c.id, c])
-      );
-    }
-
     const itemsByOrder: Record<string, OrderItem[]> = {};
     ((rawItems ?? []) as Array<{
       id: string; order_id: string; title: string; unit_price: number;
@@ -117,7 +94,6 @@ export default function OrdersPage() {
         quantity: item.quantity,
         product_id: item.product_id,
         delivered_payload: item.delivered_payload,
-        credential: item.delivered_payload ? (credMap[item.delivered_payload] ?? null) : null,
       });
     });
 
@@ -127,19 +103,22 @@ export default function OrdersPage() {
 
     const pendingAssignments = enriched.flatMap((order) =>
       order.items
-        .filter((item) => (order.status === "completed" || order.status === "pending_credentials") && !item.credential && item.product_id)
-        .map((item) => ({ orderId: order.id, productId: item.product_id }))
+        .filter((item) =>
+          (order.status === "completed" || order.status === "pending_credentials") &&
+          !item.delivered_payload &&
+          item.product_id
+        )
+        .map((item) => ({ orderId: order.id, productId: item.product_id! }))
     );
 
     if (pendingAssignments.length > 0) {
-      const assignmentResults = await Promise.allSettled(
+      const results = await Promise.allSettled(
         pendingAssignments.map(async (item) => {
           const delivery = await assignCredentialToOrder({ orderId: item.orderId, productId: item.productId });
           return delivery.assigned ? item.orderId : null;
         })
       );
-
-      if (assignmentResults.some((result) => result.status === "fulfilled" && result.value)) {
+      if (results.some((r) => r.status === "fulfilled" && r.value)) {
         return fetchOrders();
       }
     }
@@ -219,11 +198,10 @@ export default function OrdersPage() {
             {orders.map((order) => {
               const meta = STATUS_META[order.status] ?? STATUS_META.pending;
               const isOpen = expanded.has(order.id);
-              const hasCredentials = order.items.some((i) => i.credential);
+              const hasCredentials = order.items.some((i) => i.delivered_payload);
 
               return (
                 <Card key={order.id} className="overflow-hidden border border-border">
-                  {/* Order header — always visible */}
                   <button
                     onClick={() => toggleExpand(order.id)}
                     className="w-full text-left p-4 flex items-center justify-between gap-3 hover:bg-muted/30 transition-colors"
@@ -266,7 +244,6 @@ export default function OrdersPage() {
                       : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />}
                   </button>
 
-                  {/* Expanded items */}
                   {isOpen && (
                     <div className="border-t border-border divide-y divide-border">
                       {order.items.length === 0 ? (
@@ -288,50 +265,40 @@ export default function OrdersPage() {
                               </div>
                             </div>
 
-                            {/* Credential box */}
-                            {item.credential ? (
+                            {item.delivered_payload ? (
                               <div className="rounded-xl border border-purple-200 bg-purple-50/60 p-4">
                                 <div className="flex items-center gap-2 mb-3">
                                   <Key className="w-4 h-4 text-purple-600" />
                                   <span className="text-xs font-semibold text-purple-700 uppercase tracking-wide">
                                     Your Account Credentials
                                   </span>
-                                  {item.credential.label && (
-                                    <Badge className="text-xs bg-purple-100 text-purple-600 ml-auto">
-                                      {item.credential.label}
-                                    </Badge>
-                                  )}
                                 </div>
 
                                 <div className="bg-white rounded-lg border border-purple-200 p-3 mb-3 space-y-2">
-                                  {parseCredential(item.credential.content).map(({ label, value }) => (
-                                    <div key={label} className="flex items-start gap-2 text-sm">
-                                      <span className="text-xs font-semibold text-purple-600 w-28 shrink-0 pt-0.5">{label}</span>
-                                      <span className="font-mono text-brand-navy break-all">{value}</span>
-                                    </div>
-                                  ))}
+                                  {parseCredential(item.delivered_payload).length > 0
+                                    ? parseCredential(item.delivered_payload).map(({ label, value }) => (
+                                        <div key={label} className="flex items-start gap-2 text-sm">
+                                          <span className="text-xs font-semibold text-purple-600 w-28 shrink-0 pt-0.5">{label}</span>
+                                          <span className="font-mono text-brand-navy break-all">{value}</span>
+                                        </div>
+                                      ))
+                                    : <p className="font-mono text-brand-navy text-sm break-all">{item.delivered_payload}</p>
+                                  }
                                 </div>
 
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <Button
-                                    size="sm"
-                                    onClick={() => copyText(item.credential!.content, item.id)}
-                                    className={`text-xs h-8 gap-1.5 transition-all ${
-                                      copied === item.id
-                                        ? "bg-green-600 hover:bg-green-600 text-white"
-                                        : "bg-purple-600 hover:bg-purple-700 text-white"
-                                    }`}
-                                  >
-                                    {copied === item.id
-                                      ? <><CheckCheck className="w-3.5 h-3.5" />Copied!</>
-                                      : <><Copy className="w-3.5 h-3.5" />Copy All</>}
-                                  </Button>
-                                  {item.credential.delivered_at && (
-                                    <span className="text-xs text-muted-foreground">
-                                      Delivered {new Date(item.credential.delivered_at).toLocaleDateString("en-NG")}
-                                    </span>
-                                  )}
-                                </div>
+                                <Button
+                                  size="sm"
+                                  onClick={() => copyText(item.delivered_payload!, item.id)}
+                                  className={`text-xs h-8 gap-1.5 transition-all ${
+                                    copied === item.id
+                                      ? "bg-green-600 hover:bg-green-600 text-white"
+                                      : "bg-purple-600 hover:bg-purple-700 text-white"
+                                  }`}
+                                >
+                                  {copied === item.id
+                                    ? <><CheckCheck className="w-3.5 h-3.5" />Copied!</>
+                                    : <><Copy className="w-3.5 h-3.5" />Copy All</>}
+                                </Button>
                               </div>
                             ) : order.status === "pending_credentials" ? (
                               <div className="rounded-xl border border-orange-200 bg-orange-50/60 p-3 flex items-center gap-2">

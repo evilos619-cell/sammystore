@@ -1,5 +1,5 @@
 import { Link, NavLink } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, User, UserPlus, LayoutGrid, ChevronDown, Menu, LogOut, LayoutDashboard, Wallet } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,13 +12,28 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { categories, navLinks } from "@/data/site";
+import { navLinks } from "@/data/site";
 import { useAuth } from "@/lib/auth";
+import { supabase } from "@/integrations/supabase/client";
+
+type Category = { id: string; name: string; slug: string };
 
 export function SiteHeader() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
   const { user, loading, signOut, isAdmin } = useAuth();
+
+  useEffect(() => {
+    supabase
+      .from("product_categories")
+      .select("id, name, slug")
+      .order("name", { ascending: true })
+      .then(({ data }) => {
+        if (data?.length) setCategories(data as Category[]);
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur border-b border-border">
@@ -123,14 +138,20 @@ export function SiteHeader() {
                 <ChevronDown className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64">
-              {categories.map((category) => (
-                <DropdownMenuItem key={category.id} asChild>
-                  <Link to={`/products?cat=${category.slug}`} className="cursor-pointer">
-                    {category.name}
-                  </Link>
+            <DropdownMenuContent align="start" className="w-64 max-h-72 overflow-y-auto">
+              {categories.length === 0 ? (
+                <DropdownMenuItem disabled className="text-muted-foreground text-sm">
+                  Loading categories…
                 </DropdownMenuItem>
-              ))}
+              ) : (
+                categories.map((category) => (
+                  <DropdownMenuItem key={category.id} asChild>
+                    <Link to={`/products?cat=${category.slug}`} className="cursor-pointer">
+                      {category.name}
+                    </Link>
+                  </DropdownMenuItem>
+                ))
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -167,6 +188,23 @@ export function SiteHeader() {
                     {link.name}
                   </Link>
                 ))}
+                {categories.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Categories</p>
+                    <div className="max-h-48 overflow-y-auto space-y-1">
+                      {categories.map((c) => (
+                        <Link
+                          key={c.id}
+                          to={`/products?cat=${c.slug}`}
+                          onClick={() => setIsOpen(false)}
+                          className="block text-brand-navy hover:text-brand-orange transition-colors text-sm py-2 border-b border-border/50"
+                        >
+                          {c.name}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </SheetContent>
           </Sheet>

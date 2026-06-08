@@ -47,6 +47,22 @@ export default function DashboardPage() {
     });
   }, [user]);
 
+  useEffect(() => {
+    if (!user) return;
+    let ch: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      ch = supabase.channel("dash-wallet-rt")
+        .on("postgres_changes", {
+          event: "UPDATE", schema: "public", table: "wallets",
+          filter: `user_id=eq.${user.id}`,
+        }, (payload) => {
+          setWallet(payload.new as WalletRow);
+        })
+        .subscribe();
+    } catch { /* realtime optional */ }
+    return () => { if (ch) supabase.removeChannel(ch).catch(() => {}); };
+  }, [user]);
+
   if (loading || !user) return <div className="min-h-[60vh] flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-orange" /></div>;
 
   const displayName = profile?.display_name ?? user.email?.split("@")[0] ?? "User";

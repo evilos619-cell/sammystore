@@ -340,65 +340,60 @@ app.post("/api/delivery/assign-credential", async (req, res) => {
   const { orderId, productId } = req.body as { orderId?: string; productId?: string };
   if (!orderId || !productId) return err(res, 400, "orderId and productId are required");
 
-  const { data: order, error: orderErr } = await supabaseAdmin!
-    .from("orders")
-    .select("id, user_id, status, created_at")
-    .eq("id", orderId)
-    .single();
-
-  if (orderErr || !order) return err(res, 404, "Order not found");
+  const { data: order } = await supabaseAdmin!
+    .from("orders").select("id, user_id, status").eq("id", orderId).single();
+  if (!order) return err(res, 404, "Order not found");
   if ((order as Record<string, unknown>).user_id !== user.id) return err(res, 403, "Forbidden");
 
+  // Step 1: Already delivered? Return stored content directly (no credential lookup needed).
   const { data: existingItem } = await supabaseAdmin!
-    .from("order_items")
-    .select("delivered_payload")
-    .eq("order_id", orderId)
-    .eq("product_id", productId)
-    .limit(1)
-    .single();
-
+    .from("order_items").select("delivered_payload")
+    .eq("order_id", orderId).eq("product_id", productId).limit(1).single();
   if (existingItem?.delivered_payload) {
-    const { data: cred } = await supabaseAdmin!
-      .from("product_credentials")
-      .select("content, label")
-      .eq("id", existingItem.delivered_payload)
-      .single();
-
-    return res.json({
-      assigned: true,
-      content: (cred as Record<string, unknown> | null)?.content ?? null,
-      label: (cred as Record<string, unknown> | null)?.label ?? null,
-    });
+    return res.json({ assigned: true, content: existingItem.delivered_payload, label: null });
   }
 
-  const { data: credId, error: assignErr } = await supabaseAdmin!.rpc(
-    "assign_credential_to_order" as never,
-    { _order_id: orderId, _product_id: productId } as never
-  );
+  // Step 2: purchase_with_wallet calls assign_credential_to_order which sets order_id on the
+  // credential but does NOT update order_items.delivered_payload. Find that credential here.
+  const { data: assignedCred } = await supabaseAdmin!
+    .from("product_credentials").select("id, content, label")
+    .eq("order_id", orderId).eq("product_id", productId).limit(1).single();
 
-  if (assignErr) return err(res, 500, (assignErr as { message: string }).message);
+  let credId: string | null = null;
+  let credContent: string | null = null;
+  let credLabel: string | null = null;
 
-  if (!credId) {
-    await supabaseAdmin!.from("activity_logs").insert({
-      actor_id: (order as Record<string, unknown>).user_id as string,
-      action: "credential_out_of_stock",
-      target: productId,
-      metadata: { order_id: orderId },
-    });
-    return res.json({ assigned: false, content: null, label: null });
+  if (assignedCred) {
+    credId      = (assignedCred as Record<string, unknown>).id as string;
+    credContent = (assignedCred as Record<string, unknown>).content as string;
+    credLabel   = (assignedCred as Record<string, unknown>).label as string | null;
+  } else {
+    // Step 3: Assign a new credential (product still has stock and none pre-assigned yet)
+    const { data: newCredId, error: assignErr } = await supabaseAdmin!.rpc(
+      "assign_credential_to_order" as never,
+      { _order_id: orderId, _product_id: productId } as never
+    );
+    if (assignErr) return err(res, 500, (assignErr as { message: string }).message);
+    if (!newCredId) return res.json({ assigned: false, content: null, label: null });
+
+    const { data: c } = await supabaseAdmin!
+      .from("product_credentials").select("content, label").eq("id", newCredId as string).single();
+    credId      = newCredId as string;
+    credContent = (c as Record<string, unknown> | null)?.content as string | null;
+    credLabel   = (c as Record<string, unknown> | null)?.label as string | null;
   }
 
-  const { data: cred } = await supabaseAdmin!
-    .from("product_credentials")
-    .select("content, label")
-    .eq("id", credId as string)
-    .single();
+  if (!credContent) return res.json({ assigned: false, content: null, label: null });
 
-  return res.json({
-    assigned: true,
-    content: (cred as Record<string, unknown> | null)?.content ?? null,
-    label: (cred as Record<string, unknown> | null)?.label ?? null,
-  });
+  // Step 4: Store content string directly in delivered_payload (not the credential UUID)
+  await supabaseAdmin!.from("order_items")
+    .update({ delivered_payload: credContent })
+    .eq("order_id", orderId).eq("product_id", productId);
+
+  // Step 5: Delete credential — content is now safely stored in delivered_payload
+  if (credId) await supabaseAdmin!.from("product_credentials").delete().eq("id", credId);
+
+  return res.json({ assigned: true, content: credContent, label: credLabel });
 });
 
 // ─── Paystack webhook (automatic — Paystack calls this after payment) ─────────
@@ -465,32 +460,115 @@ app.post("/api/delivery/admin-redispense", async (req, res) => {
   if (!user) return err(res, 401, "Unauthorized");
 
   const { data: roles } = await supabaseAdmin!
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .eq("role", "admin")
-    .limit(1);
+    .from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").limit(1);
   if (!roles?.length) return err(res, 403, "Forbidden: admin access required");
 
   const { orderId, productId } = req.body as { orderId?: string; productId?: string };
   if (!orderId || !productId) return err(res, 400, "orderId and productId are required");
 
-  const { data: credId, error: assignErr } = await supabaseAdmin!.rpc(
-    "assign_credential_to_order" as never,
-    { _order_id: orderId, _product_id: productId } as never
-  );
+  // Already delivered? Return stored content.
+  const { data: existingItem } = await supabaseAdmin!
+    .from("order_items").select("delivered_payload")
+    .eq("order_id", orderId).eq("product_id", productId).limit(1).single();
+  if (existingItem?.delivered_payload) {
+    return res.json({ assigned: true, content: existingItem.delivered_payload });
+  }
 
-  if (assignErr) return err(res, 500, (assignErr as { message: string }).message);
+  // Credential already assigned to this order by purchase_with_wallet?
+  const { data: assignedCred } = await supabaseAdmin!
+    .from("product_credentials").select("id, content")
+    .eq("order_id", orderId).eq("product_id", productId).limit(1).single();
 
-  if (!credId) return res.json({ assigned: false, message: "No available credentials for this product" });
+  let credId: string | null = null;
+  let credContent: string | null = null;
 
-  const { data: cred } = await supabaseAdmin!
-    .from("product_credentials")
-    .select("content, label")
-    .eq("id", credId as string)
-    .single();
+  if (assignedCred) {
+    credId      = (assignedCred as Record<string, unknown>).id as string;
+    credContent = (assignedCred as Record<string, unknown>).content as string;
+  } else {
+    const { data: newCredId, error: assignErr } = await supabaseAdmin!.rpc(
+      "assign_credential_to_order" as never,
+      { _order_id: orderId, _product_id: productId } as never
+    );
+    if (assignErr) return err(res, 500, (assignErr as { message: string }).message);
+    if (!newCredId) return res.json({ assigned: false, message: "No available credentials for this product" });
 
-  return res.json({ assigned: true, content: (cred as Record<string, unknown> | null)?.content ?? null });
+    const { data: c } = await supabaseAdmin!
+      .from("product_credentials").select("content").eq("id", newCredId as string).single();
+    credId      = newCredId as string;
+    credContent = (c as Record<string, unknown> | null)?.content as string | null;
+  }
+
+  if (!credContent) return res.json({ assigned: false, message: "Credential content not found" });
+
+  // Store content in delivered_payload
+  await supabaseAdmin!.from("order_items")
+    .update({ delivered_payload: credContent })
+    .eq("order_id", orderId).eq("product_id", productId);
+
+  // Delete credential
+  if (credId) await supabaseAdmin!.from("product_credentials").delete().eq("id", credId);
+
+  return res.json({ assigned: true, content: credContent });
+});
+
+// ─── Product management (admin-only, uses service role to bypass RLS) ────────
+app.post("/api/products/upsert", async (req, res) => {
+  if (!requireSupabase(res)) return;
+  const user = await getAuthUser(req);
+  if (!user) return err(res, 401, "Unauthorized");
+  const { data: roles } = await supabaseAdmin!.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").limit(1);
+  if (!roles?.length) return err(res, 403, "Forbidden");
+  const { id, ...payload } = req.body as { id?: string; [key: string]: unknown };
+  const now = new Date().toISOString();
+  if (id) {
+    const { data, error } = await supabaseAdmin!.from("products").update({ ...payload, updated_at: now }).eq("id", id).select().single();
+    if (error) return err(res, 400, error.message);
+    return res.json({ product: data });
+  }
+  const { data, error } = await supabaseAdmin!.from("products").insert({ ...payload, created_at: now, updated_at: now }).select().single();
+  if (error) return err(res, 400, error.message);
+  return res.json({ product: data });
+});
+
+app.delete("/api/products/:id", async (req, res) => {
+  if (!requireSupabase(res)) return;
+  const user = await getAuthUser(req);
+  if (!user) return err(res, 401, "Unauthorized");
+  const { data: roles } = await supabaseAdmin!.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").limit(1);
+  if (!roles?.length) return err(res, 403, "Forbidden");
+  const { error } = await supabaseAdmin!.from("products").delete().eq("id", req.params.id);
+  if (error) return err(res, 400, error.message);
+  return res.json({ success: true });
+});
+
+// ─── Category management (admin-only, uses service role to bypass RLS) ───────
+app.post("/api/categories/upsert", async (req, res) => {
+  if (!requireSupabase(res)) return;
+  const user = await getAuthUser(req);
+  if (!user) return err(res, 401, "Unauthorized");
+  const { data: roles } = await supabaseAdmin!.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").limit(1);
+  if (!roles?.length) return err(res, 403, "Forbidden");
+  const { id, ...payload } = req.body as { id?: string; [key: string]: unknown };
+  if (id) {
+    const { data, error } = await supabaseAdmin!.from("product_categories").update(payload).eq("id", id).select().single();
+    if (error) return err(res, 400, error.message);
+    return res.json({ category: data });
+  }
+  const { data, error } = await supabaseAdmin!.from("product_categories").insert(payload).select().single();
+  if (error) return err(res, 400, error.message);
+  return res.json({ category: data });
+});
+
+app.delete("/api/categories/:id", async (req, res) => {
+  if (!requireSupabase(res)) return;
+  const user = await getAuthUser(req);
+  if (!user) return err(res, 401, "Unauthorized");
+  const { data: roles } = await supabaseAdmin!.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").limit(1);
+  if (!roles?.length) return err(res, 403, "Forbidden");
+  const { error } = await supabaseAdmin!.from("product_categories").delete().eq("id", req.params.id);
+  if (error) return err(res, 400, error.message);
+  return res.json({ success: true });
 });
 
 app.post("/api/wallet/ensure", async (req, res) => {

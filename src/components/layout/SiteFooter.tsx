@@ -52,6 +52,8 @@ export function SiteFooter() {
             <FooterLink to="/blog">Blog</FooterLink>
             <FooterLink to="/contact">Contact</FooterLink>
             <FooterLink to="/dashboard">Dashboard</FooterLink>
+            <FooterLink to="/terms">Terms of Service</FooterLink>
+            <FooterLink to="/privacy-policy">Privacy Policy</FooterLink>
           </FooterCol>
 
           <div>
@@ -94,8 +96,8 @@ export function SiteFooter() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-3">
             <p className="text-white/60 text-sm">&copy; {year} Sammy Store Logs. All rights reserved.</p>
             <div className="flex items-center gap-5 text-sm text-white/60">
-              <Link to="/about" className="hover:text-white transition-colors">Privacy Policy</Link>
-              <Link to="/about" className="hover:text-white transition-colors">Terms of Service</Link>
+              <Link to="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</Link>
+              <Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
             </div>
           </div>
         </div>

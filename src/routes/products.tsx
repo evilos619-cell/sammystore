@@ -1,7 +1,7 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, Facebook, Instagram, Twitter, Youtube, Wrench, Loader2, ShoppingCart, X, Copy, CheckCheck, PackageCheck, AlertCircle, CreditCard } from "lucide-react";
+import { ArrowRight, Facebook, Instagram, Twitter, Youtube, Linkedin, Music2, Send, MessageCircle, Globe, ShoppingBag, Loader2, ShoppingCart, X, Copy, CheckCheck, PackageCheck, AlertCircle, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { PageHero } from "@/components/sections/PageHero";
 import { categories as staticCategories } from "@/data/site";
@@ -24,10 +24,30 @@ function parseCred(content: string) {
   return CRED_FIELDS.map((label, i) => ({ label, value: parts[i] ?? "" })).filter((f) => f.value);
 }
 
-const platformIcons: Record<string, React.ElementType> = {
-  "aged-twitter": Twitter, "aged-instagram": Instagram, "random-facebook": Facebook,
-  "usa-facebook": Facebook, tools: Wrench, "working-profiles": Instagram, "below-50-friend": Facebook, youtube: Youtube,
-};
+type CategoryMeta = { Icon: React.ElementType; iconColor: string; bg: string };
+function getCategoryMeta(slug: string, name: string): CategoryMeta {
+  const s = (slug ?? "").toLowerCase();
+  const n = (name ?? "").toLowerCase();
+  if (s.includes("twitter") || s.includes("-x-") || s.endsWith("-x") || n.includes("twitter") || / x$/.test(n))
+    return { Icon: Twitter, iconColor: "text-slate-900", bg: "bg-slate-100" };
+  if (s.includes("instagram") || n.includes("instagram"))
+    return { Icon: Instagram, iconColor: "text-pink-600", bg: "bg-pink-100" };
+  if (s.includes("facebook") || n.includes("facebook") || s.includes("fb-") || n.includes(" fb "))
+    return { Icon: Facebook, iconColor: "text-blue-600", bg: "bg-blue-100" };
+  if (s.includes("youtube") || n.includes("youtube"))
+    return { Icon: Youtube, iconColor: "text-red-600", bg: "bg-red-100" };
+  if (s.includes("tiktok") || n.includes("tiktok"))
+    return { Icon: Music2, iconColor: "text-slate-800", bg: "bg-slate-100" };
+  if (s.includes("linkedin") || n.includes("linkedin"))
+    return { Icon: Linkedin, iconColor: "text-blue-700", bg: "bg-blue-100" };
+  if (s.includes("telegram") || n.includes("telegram"))
+    return { Icon: Send, iconColor: "text-sky-500", bg: "bg-sky-100" };
+  if (s.includes("whatsapp") || n.includes("whatsapp"))
+    return { Icon: MessageCircle, iconColor: "text-green-600", bg: "bg-green-100" };
+  if (s.includes("website") || s.includes("web") || n.includes("website") || n.includes("web"))
+    return { Icon: Globe, iconColor: "text-brand-orange", bg: "bg-brand-orange/10" };
+  return { Icon: ShoppingBag, iconColor: "text-gray-500", bg: "bg-gray-100" };
+}
 
 export default function ProductsPage() {
   const { user } = useAuth();
@@ -161,7 +181,7 @@ export default function ProductsPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 mb-12">
             {displayCategories.map((category, index) => {
-              const Icon = platformIcons[category.slug] ?? Facebook;
+              const { Icon, iconColor, bg } = getCategoryMeta(category.slug, category.name);
               const isActive = activeCat === category.slug;
               return (
                 <motion.button key={category.id}
@@ -170,8 +190,8 @@ export default function ProductsPage() {
                   onClick={() => setCat(isActive ? undefined : category.slug)}
                   className={`group text-left bg-card rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all border ${isActive ? "border-brand-orange ring-2 ring-brand-orange/30" : "border-border"}`}>
                   <div className="flex items-start justify-between mb-4">
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-colors ${isActive ? "bg-brand-orange" : "bg-brand-orange/10 group-hover:bg-brand-orange"}`}>
-                      <Icon className={`w-6 h-6 transition-colors ${isActive ? "text-white" : "text-brand-orange group-hover:text-white"}`} />
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-colors ${isActive ? "bg-brand-orange" : `${bg} group-hover:bg-brand-orange`}`}>
+                      <Icon className={`w-6 h-6 transition-colors ${isActive ? "text-white" : `${iconColor} group-hover:text-white`}`} />
                     </div>
                     <span className="text-xs font-medium text-green-700 bg-green-100 px-3 py-1 rounded-full">Available</span>
                   </div>
