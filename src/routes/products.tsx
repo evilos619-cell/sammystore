@@ -1,7 +1,7 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, Facebook, Instagram, Twitter, Youtube, Linkedin, Music2, Send, MessageCircle, Globe, ShoppingBag, Loader2, ShoppingCart, X, Copy, CheckCheck, PackageCheck, AlertCircle, CreditCard } from "lucide-react";
+import { ArrowRight, Facebook, Instagram, Twitter, Youtube, Linkedin, Music2, Send, MessageCircle, Globe, ShoppingBag, Loader2, ShoppingCart, X, Copy, CheckCheck, PackageCheck, AlertCircle, CreditC } from "lucide-react";
 import { toast } from "sonner";
 import { PageHero } from "@/components/sections/PageHero";
 import { categories as staticCategories } from "@/data/site";
@@ -224,7 +224,7 @@ export default function ProductsPage() {
                 <motion.button key={category.id}
                   initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
                   transition={{ duration: 0.45, delay: index * 0.08 }} whileHover={{ y: -4 }}
-                  onClick={() => navigate(`/products/${category.slug}`)}
+                  onClick={() => navigate(`/products?cat=${category.slug}`)}
                   className={`group text-left bg-card rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all border ${isActive ? "border-brand-orange ring-2 ring-brand-orange/30" : "border-border"}`}>
                   <div className="flex items-start justify-between mb-4">
                     <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-colors ${isActive ? "bg-brand-orange" : `${bg} group-hover:bg-brand-orange`}`}>
@@ -261,7 +261,7 @@ export default function ProductsPage() {
                       <Button size="sm" variant="outline"
                         onClick={() => { setTopUpAmount(undefined); setTopUpOpen(true); }}
                         className="h-8 border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white text-xs">
-                        <CreditCard className="w-3.5 h-3.5 mr-1" />Top Up
+                        <CreditC className="w-3.5 h-3.5 mr-1" />Top Up
                       </Button>
                     )}
                     <button onClick={() => setCat(undefined)} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-brand-navy transition-colors">

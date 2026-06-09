@@ -63,7 +63,7 @@ export default function HomePage() {
             >
               {categories.slice(0, 5).map((category, idx) => (
                 <span key={category.id} className="flex items-center text-sm">
-                  <Link to="/products" className="text-muted-foreground hover:text-brand-orange transition-colors">
+                  <Link to={`/products?cat=${category.slug}`} className="text-muted-foreground hover:text-brand-orange transition-colors">
                     {category.name}
                   </Link>
                   {idx < 4 && <span className="text-border ml-5">|</span>}
