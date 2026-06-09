@@ -1,16 +1,8 @@
-// This route catches /products/:categorySlug and redirects to the
-// correct URL so the full products page (with buy logic) handles it.
-import { useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+// This file used to provide a redirect route from /products/:categorySlug
+// to /products?cat=<slug>. That route is no longer needed because the
+// app now links directly to /products?cat=<slug>. Keeping this stub
+// prevents accidental imports; remove the file entirely if you prefer.
 
 export default function CategoryRedirect() {
-  const { categorySlug } = useParams();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    // Immediately redirect to the correct products URL with cat param
-    navigate(`/products${categorySlug ? `?cat=${categorySlug}` : ""}`, { replace: true });
-  }, [categorySlug, navigate]);
-
   return null;
 }
