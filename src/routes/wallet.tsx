@@ -1,3 +1,4 @@
+import BankTransferTopup from "@/components/BankTransferTopup";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Wallet, ArrowDownCircle, ArrowUpCircle, Bitcoin, CreditCard, CheckCircle2, RefreshCw, AlertCircle } from "lucide-react";
@@ -304,13 +305,18 @@ export default function WalletPage() {
               <TabsList className="mb-6">
                 <TabsTrigger value="fund">Fund Wallet</TabsTrigger>
                 <TabsTrigger value="history">Transaction History</TabsTrigger>
+                <TabsTrigger value="bank">Bank Transfer</TabsTrigger>
               </TabsList>
 
               <TabsContent value="fund">
                 <FundWallet user={user} wallet={wallet} onFunded={fetchData} />
               </TabsContent>
 
-              <TabsContent value="history">
+              <TabsContent value="bank">
+                  <BankTransferTopup userId={user.id} />
+                </TabsContent>
+
+                <TabsContent value="history">
                 <TransactionList transactions={transactions} />
               </TabsContent>
             </Tabs>
