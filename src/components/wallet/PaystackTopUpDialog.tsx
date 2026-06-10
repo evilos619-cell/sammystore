@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, CreditCard } from "lucide-react";
+import { Loader2, CreditCard, Copy } from "lucide-react";
 import { toast } from "sonner";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +25,13 @@ export function PaystackTopUpDialog({ open, onOpenChange, user, defaultAmount, o
   const [amount, setAmount] = useState(defaultAmount ? String(defaultAmount) : "");
   const [loading, setLoading] = useState(false);
   const psLoaded = useRef(false);
+
+  // Manual deposit states
+  const [method, setMethod] = useState<"paystack" | "manual">("paystack");
+  const [manualRef, setManualRef] = useState<string | null>(null);
+  const [manualCreated, setManualCreated] = useState(false);
+  const [manualSubmitting, setManualSubmitting] = useState(false);
+  const [manualSubmitted, setManualSubmitted] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -74,7 +81,7 @@ export function PaystackTopUpDialog({ open, onOpenChange, user, defaultAmount, o
           const result = await verifyPaystackPayment({ reference: tx.reference, userId: user.id });
           toast.dismiss(tid);
           if (result.alreadyCredited) toast.info("Payment already credited");
-          else toast.success(`₦${result.amount?.toLocaleString()} added to your wallet!`);
+          else toast.success(`₦${result.amount?.toLocaleString()} added to your wallet!");
           const { data } = await supabase.from("wallets").select("balance").eq("user_id", user.id).single();
           onFunded?.(data ? Number(data.balance) : null);
           onOpenChange(false);
@@ -90,6 +97,55 @@ export function PaystackTopUpDialog({ open, onOpenChange, user, defaultAmount, o
     handler.openIframe();
   };
 
+  // Manual deposit handlers
+  const BANK_NAME = import.meta.env.VITE_MANUAL_BANK_NAME ?? "Contact admin for bank details";
+  const ACCOUNT_NUMBER = import.meta.env.VITE_MANUAL_ACCOUNT_NUMBER ?? "";
+  const ACCOUNT_NAME = import.meta.env.VITE_MANUAL_ACCOUNT_NAME ?? "";
+
+  const handleCreateManual = async () => {
+    if (amt < 100) return toast.error("Minimum top-up is ₦100");
+    setManualCreated(false);
+    setManualSubmitted(false);
+    setManualRef(null);
+
+    const ref = `manual-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+    setManualSubmitting(true);
+    const { error: intentErr } = await supabase.from("payment_intents").insert({
+      user_id: user.id, provider: "manual", reference: ref, amount: amt, currency: "NGN", status: "pending",
+    });
+    setManualSubmitting(false);
+    if (intentErr) {
+      toast.error("Failed to create manual deposit request");
+      return;
+    }
+    setManualRef(ref);
+    setManualCreated(true);
+    toast.success("Manual deposit request created — follow the instructions below to complete the transfer.");
+  };
+
+  const handleNotifyPaid = async () => {
+    if (!manualRef) return;
+    setManualSubmitting(true);
+    const { error } = await supabase.from("payment_intents").update({ status: "submitted" }).eq("reference", manualRef);
+    setManualSubmitting(false);
+    if (error) {
+      toast.error("Failed to notify — please contact support");
+      return;
+    }
+    setManualSubmitted(true);
+    toast.success("Notified admin. Your payment will be verified shortly.");
+  };
+
+  const handleCopyRef = async () => {
+    if (!manualRef) return;
+    try {
+      await navigator.clipboard.writeText(manualRef);
+      toast.success("Reference copied");
+    } catch {
+      toast.error("Failed to copy reference");
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
@@ -99,33 +155,84 @@ export function PaystackTopUpDialog({ open, onOpenChange, user, defaultAmount, o
             Fund Your Wallet
           </DialogTitle>
         </DialogHeader>
+
         <div className="py-2 space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Pay instantly via card, bank transfer, or USSD. Funds are credited to your wallet on success.
-          </p>
-          <div>
-            <Label className="text-xs font-medium text-muted-foreground mb-2 block">Quick amounts</Label>
-            <div className="flex flex-wrap gap-2">
-              {PRESETS.map((p) => (
-                <button key={p} type="button" onClick={() => setAmount(String(p))}
-                  className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${amount === String(p) ? "bg-brand-orange text-white border-brand-orange" : "border-border hover:border-brand-orange hover:text-brand-orange"}`}>
-                  ₦{p.toLocaleString()}
-                </button>
-              ))}
-            </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setMethod("paystack")} className={`px-3 py-1 rounded-md ${method === "paystack" ? "bg-brand-orange text-white" : "border border-border"}`}>
+              Paystack / Card
+            </button>
+            <button onClick={() => setMethod("manual")} className={`px-3 py-1 rounded-md ${method === "manual" ? "bg-brand-orange text-white" : "border border-border"}`}>
+              Manual deposit
+            </button>
           </div>
-          <div>
-            <Label htmlFor="topup-amount">Amount (₦)</Label>
-            <Input id="topup-amount" type="number" min="100" placeholder="Enter amount" value={amount}
-              onChange={(e) => setAmount(e.target.value)} className="mt-1" />
-          </div>
+
+          {method === "paystack" ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Pay instantly via card, bank transfer, or USSD. Funds are credited to your wallet on success.
+              </p>
+
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground mb-2 block">Quick amounts</Label>
+                <div className="flex flex-wrap gap-2">
+                  {PRESETS.map((p) => (
+                    <button key={p} type="button" onClick={() => setAmount(String(p))}
+                      className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${amount === String(p) ? "bg-brand-orange text-white border-brand-orange" : "border-border hover:border-border/80"}`}>
+                      ₦{p.toLocaleString()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="topup-amount">Amount (₦)</Label>
+                <Input id="topup-amount" type="number" min="100" placeholder="Enter amount" value={amount}
+                  onChange={(e) => setAmount(e.target.value)} className="mt-1" />
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Create a manual deposit request to receive bank transfer instructions. After you complete the transfer, use "Notify Paid" so our team can verify and credit your wallet.
+              </p>
+
+              <div>
+                <Label htmlFor="topup-amount">Amount (₦)</Label>
+                <Input id="topup-amount" type="number" min="100" placeholder="Enter amount" value={amount}
+                  onChange={(e) => setAmount(e.target.value)} className="mt-1" />
+              </div>
+
+              {manualCreated && manualRef && (
+                <div className="bg-muted rounded-lg p-3 border border-border space-y-2">
+                  <div className="text-sm font-medium">Bank transfer details</div>
+                  <div className="text-xs text-muted-foreground">Bank: {BANK_NAME || "Contact admin"}</div>
+                  <div className="text-xs text-muted-foreground">Account: {ACCOUNT_NUMBER || "—"}</div>
+                  <div className="text-xs text-muted-foreground">Account name: {ACCOUNT_NAME || "—"}</div>
+                  <div className="text-xs text-muted-foreground break-all">Reference: <span className="font-mono">{manualRef}</span></div>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={handleCopyRef}><Copy className="w-3.5 h-3.5 mr-1" />Copy reference</Button>
+                    <Button size="sm" onClick={handleNotifyPaid} disabled={manualSubmitting || manualSubmitted} className="bg-brand-orange text-white">
+                      {manualSubmitting ? "Notifying…" : manualSubmitted ? "Notified" : "I've paid / Notify"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handlePay} disabled={loading || amt < 100} className="bg-brand-orange hover:bg-brand-orange-hover text-white">
-            {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            Pay ₦{amt > 0 ? amt.toLocaleString() : "—"}
-          </Button>
+          {method === "paystack" ? (
+            <Button onClick={handlePay} disabled={loading || amt < 100} className="bg-brand-orange hover:bg-brand-orange-hover text-white">
+              {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Pay ₦{amt > 0 ? amt.toLocaleString() : "—"}
+            </Button>
+          ) : (
+            <Button onClick={handleCreateManual} disabled={manualSubmitting || amt < 100} className="bg-brand-orange hover:bg-brand-orange-hover text-white">
+              {manualSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Create manual deposit
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

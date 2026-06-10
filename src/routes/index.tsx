@@ -63,7 +63,7 @@ export default function HomePage() {
             >
               {categories.slice(0, 5).map((category, idx) => (
                 <span key={category.id} className="flex items-center text-sm">
-                  <Link to="/products" className="text-muted-foreground hover:text-brand-orange transition-colors">
+                  <Link to={`/products?cat=${category.slug}`} className="text-muted-foreground hover:text-brand-orange transition-colors">
                     {category.name}
                   </Link>
                   {idx < 4 && <span className="text-border ml-5">|</span>}
@@ -123,7 +123,6 @@ export default function HomePage() {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.6 }}
-              className="relative"
             >
               <div className="relative rounded-3xl overflow-hidden shadow-2xl">
                 <img src="/images/about-promo.jpg" alt="Sammy Store Logs" className="w-full h-auto object-cover" />

@@ -11,12 +11,12 @@ import AuthPage from "@/routes/auth";
 import DashboardPage from "@/routes/dashboard";
 import WalletPage from "@/routes/wallet";
 import ProductsPage from "@/routes/products";
+import ProductDetailPage from "@/routes/product-detail";
 import AdminPage from "@/routes/admin";
 import ResetPasswordPage from "@/routes/reset-password";
 import OrdersPage from "@/routes/orders";
 import TermsPage from "@/routes/terms";
 import PrivacyPage from "@/routes/privacy";
-import CategoryPage from "@/routes/category";
 
 export default function App() {
   return (
@@ -32,12 +32,12 @@ export default function App() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/wallet" element={<WalletPage />} />
           <Route path="/products" element={<ProductsPage />} />
+          <Route path="/products/:slug" element={<ProductDetailPage />} />
           <Route path="/orders" element={<OrdersPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy-policy" element={<PrivacyPage />} />
-          <Route path="/products/:categorySlug" element={<CategoryPage />} />
         </Routes>
       </main>
       <SiteFooter />
